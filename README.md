@@ -2,11 +2,10 @@
 A* pathfinding library for the Odin programming language
 
 ## **✨ Features**
-✔️ **A* Pathfinding Algorithm** – Find the shortest path efficiently.  
-✔️ **Multiple Heuristics** – Choose from **Euclidean (default), Manhattan, Octile, and Chebyshev**.  
-✔️ **Configurable Costs & Obstacles** – Set custom movement costs and blocked tiles.    
-✔️ **Multiple Diagonal Modes** – Choose from **NO_CORNER_CUT (default), NEVER, and ALWAYS**.
----
+✔️ A* Pathfinding Algorithm – Find the shortest path efficiently.  
+✔️ Multiple Heuristics – Choose from Euclidean (default), Manhattan, Octile, and Chebyshev.  
+✔️ Configurable Costs & Obstacles – Set custom movement costs and blocked tiles.    
+✔️ Multiple Diagonal Modes – Choose from NO_CORNER_CUT (default), NEVER, and ALWAYS.
 
 ## **Setup**
 To include FabFlow in your **Odin** project, add it as a Git submodule:
