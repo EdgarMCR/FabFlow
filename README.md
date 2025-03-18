@@ -54,3 +54,6 @@ main :: proc() {
     }
 }
 ```
+
+## **Credits & Inspiration**
+FabFlow was inspired by [odin_pathgrid](https://github.com/scoobery/odin_pathgrid) by **scoobery**. 
