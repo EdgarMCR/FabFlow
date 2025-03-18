@@ -20,7 +20,7 @@ git submodule update --init --recursive
 package fabflowtest
 
 import "core:fmt"
-import ff "vendor:FabFlow"
+import ff "/vendor/FabFlow"
 
 main :: proc() {  
     blocked_tiles: [][2]i32 = {
@@ -46,8 +46,8 @@ main :: proc() {
 
     if found {
         fmt.println("Path found:")
-        for node in path.nodes {
-            fmt.printf(" → (%v, %v)", node.tile.pos.x, node.tile.pos.y)
+        for node, i in path.nodes {
+            fmt.printf("%v ->(%v, %v) ", i, node.tile.pos.x, node.tile.pos.y)
         }
     } else {
         fmt.println("No path found.")
