@@ -3,9 +3,13 @@ A* pathfinding library for the Odin programming language
 
 ## **✨ Features**
 ✔️ A* Pathfinding Algorithm – Find the shortest path efficiently.  
+
 ✔️ Multiple Heuristics – Choose from Euclidean (default), Manhattan, Octile, and Chebyshev.  
+
 ✔️ Configurable Costs & Obstacles – Set custom movement costs and blocked tiles.    
+
 ✔️ Multiple Diagonal Modes – Choose from NO_CORNER_CUT (default), NEVER, and ALWAYS.
+
 ✔️ Custom Entity Sizes - Supports entities larger than one tile. If the target position doesn't fully accommodate the entity's footprint, FabFlow automatically returns a path to the nearest valid position.
 
 ## **Setup**

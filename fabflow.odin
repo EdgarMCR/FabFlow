@@ -123,6 +123,9 @@ find_path :: proc(grid: Grid, startCoord, targetCoord : Vector2, size := SMALL_T
     path_arena: vmem.Arena
     path_arena_allocator := vmem.arena_allocator(&path_arena)
 
+    neighbour_arena: vmem.Arena
+    neighbour_arena_allocator := vmem.arena_allocator(&neighbour_arena)
+
     fail_path :: proc() -> (Path, bool) {
         return Path {}, false
     }
@@ -174,7 +177,7 @@ find_path :: proc(grid: Grid, startCoord, targetCoord : Vector2, size := SMALL_T
 
     // A* search loop.
     for pq.len(openSet) > 0 {
-        free_all(context.temp_allocator)
+        vmem.arena_destroy(&neighbour_arena, loc)
 
         current := pq.pop(&openSet)
         append(&closedSet, current)
@@ -192,7 +195,7 @@ find_path :: proc(grid: Grid, startCoord, targetCoord : Vector2, size := SMALL_T
         }
         
         // Process each neighbour.
-        neighbours := get_neighbours(grid, size, current, astar_nodes)
+        neighbours := get_neighbours(grid, size, current, astar_nodes, neighbour_arena_allocator)
         for &neighbour in neighbours {
             if !neighbour.tile.isWalkable {
                 continue
@@ -252,7 +255,7 @@ retrace_path :: proc(start, target: ^AStar_Node, allocator := context.allocator,
 }
 
 @(private = "file")
-get_neighbours :: proc(grid: Grid, size: Vector2, node: ^AStar_Node, nodes: []AStar_Node, allocator := context.temp_allocator, loc := #caller_location) -> []^AStar_Node {
+get_neighbours :: proc(grid: Grid, size: Vector2, node: ^AStar_Node, nodes: []AStar_Node, allocator := context.allocator, loc := #caller_location) -> []^AStar_Node {
     neighbours := make([dynamic]^AStar_Node, 0, allocator, loc)
 
     pos : Vector2 = { i32(node.tile.pos.x), i32(node.tile.pos.y) }
