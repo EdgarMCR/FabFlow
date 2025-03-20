@@ -1,4 +1,4 @@
-package astar
+package fabflow
 
 import "core:math"
 import "core:slice"
