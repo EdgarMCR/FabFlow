@@ -3,9 +3,14 @@ A* pathfinding library for the Odin programming language
 
 ## **✨ Features**
 ✔️ A* Pathfinding Algorithm – Find the shortest path efficiently.  
+
 ✔️ Multiple Heuristics – Choose from Euclidean (default), Manhattan, Octile, and Chebyshev.  
+
 ✔️ Configurable Costs & Obstacles – Set custom movement costs and blocked tiles.    
+
 ✔️ Multiple Diagonal Modes – Choose from NO_CORNER_CUT (default), NEVER, and ALWAYS.
+
+✔️ Custom Entity Sizes - Supports entities larger than one tile. If the target position doesn't fully accommodate the entity's footprint, FabFlow automatically returns a path to the nearest valid position.
 
 ## **Setup**
 To include FabFlow in your **Odin** project, add it as a Git submodule:
@@ -53,6 +58,14 @@ main :: proc() {
         fmt.println("No path found.")
     }
 }
+```
+
+## **Custom Entity Sizes**
+FabFlow supports pathfinding for entities larger than a single tile. When you specify a custom entity size, the algorithm verifies that the entire footprint can move through the grid. If the target area doesn't fully accommodate the entity, the library automatically computes a path to the closest valid position where the entity can fit.
+
+```sh
+entity_size: [2]i32 = {2, 2}
+path, found := ff.find_path(grid, {0, 0}, {7, 7}, entity_size)
 ```
 
 ## **Credits & Inspiration**

@@ -1,6 +1,5 @@
 package fabflow
 
-import "core:fmt"
 import "core:math"
 import "core:slice"
 import "core:mem"
@@ -8,6 +7,8 @@ import vmem "core:mem/virtual"
 import pq "core:container/priority_queue"
 
 Vector2 :: [2]i32
+
+SMALL_TILE_SIZE : Vector2 : {1, 1}
 
 Grid :: struct {
     region: struct { min, max: Vector2 },
@@ -114,7 +115,7 @@ when ODIN_DEBUG {
     closedSetHistory: [dynamic][]^AStar_Node
 }
 
-find_path :: proc(grid: Grid, startCoord, targetCoord: Vector2, loc := #caller_location) -> (Path, bool) {
+find_path :: proc(grid: Grid, startCoord, targetCoord : Vector2, size := SMALL_TILE_SIZE, loc := #caller_location) -> (Path, bool) {
     cols := grid.cols
     rows := grid.rows
     found:= false
@@ -122,12 +123,15 @@ find_path :: proc(grid: Grid, startCoord, targetCoord: Vector2, loc := #caller_l
     path_arena: vmem.Arena
     path_arena_allocator := vmem.arena_allocator(&path_arena)
 
+    neighbour_arena: vmem.Arena
+    neighbour_arena_allocator := vmem.arena_allocator(&neighbour_arena)
+
     fail_path :: proc() -> (Path, bool) {
         return Path {}, false
     }
     
     // Validate coordinates.
-    if !is_valid_position(startCoord, cols, rows) || !is_valid_position(targetCoord, cols, rows) {
+    if !is_valid_footprint(grid, startCoord, size) || !is_valid_footprint(grid, targetCoord, SMALL_TILE_SIZE) {
         return fail_path()
     }
 
@@ -146,7 +150,9 @@ find_path :: proc(grid: Grid, startCoord, targetCoord: Vector2, loc := #caller_l
     }
 
     start := &astar_nodes[to_index(startCoord, cols)]
-    target := &astar_nodes[to_index(targetCoord, cols)]
+
+    valid_target : Vector2 = find_nearest_valid_target(grid, targetCoord, size);
+    target := &astar_nodes[to_index(valid_target, cols)];
 
     if !target.tile.isWalkable {
         return fail_path()
@@ -171,7 +177,7 @@ find_path :: proc(grid: Grid, startCoord, targetCoord: Vector2, loc := #caller_l
 
     // A* search loop.
     for pq.len(openSet) > 0 {
-        free_all(context.temp_allocator)
+        vmem.arena_destroy(&neighbour_arena, loc)
 
         current := pq.pop(&openSet)
         append(&closedSet, current)
@@ -189,7 +195,7 @@ find_path :: proc(grid: Grid, startCoord, targetCoord: Vector2, loc := #caller_l
         }
         
         // Process each neighbour.
-        neighbours := get_neighbours(grid, current, astar_nodes)
+        neighbours := get_neighbours(grid, size, current, astar_nodes, neighbour_arena_allocator)
         for &neighbour in neighbours {
             if !neighbour.tile.isWalkable {
                 continue
@@ -234,6 +240,91 @@ destroy_path :: proc (path: ^Path, loc := #caller_location) {
 }
 
 @(private = "file")
+retrace_path :: proc(start, target: ^AStar_Node, allocator := context.allocator, loc := #caller_location) -> []^AStar_Node { 
+    path := make([dynamic]^AStar_Node, allocator, loc) 
+    current := target
+
+    for current.tile.pos != start.tile.pos {
+        append(&path, current)
+        current = current.parent
+    }
+    append(&path, start) 
+
+    slice.reverse(path[:])
+    return path[:]
+}
+
+@(private = "file")
+get_neighbours :: proc(grid: Grid, size: Vector2, node: ^AStar_Node, nodes: []AStar_Node, allocator := context.allocator, loc := #caller_location) -> []^AStar_Node {
+    neighbours := make([dynamic]^AStar_Node, 0, allocator, loc)
+
+    pos : Vector2 = { i32(node.tile.pos.x), i32(node.tile.pos.y) }
+    cols  := grid.cols
+    rows  := grid.rows
+
+    for dx in -1..=1 {
+        for dy in -1..=1 {
+            if dx == 0 && dy == 0 {
+                continue
+            }
+
+            new_pos : Vector2 = { pos.x + i32(dx), pos.y + i32(dy) }
+
+            if !is_valid_footprint(grid, new_pos, size) {
+                continue
+            }
+
+            index := new_pos.y * cols + new_pos.x
+            neighbor := &nodes[index]
+
+            if dx != 0 && dy != 0 {
+
+                if grid.diagonal_mode == AStar_Diagonal_Mode.NEVER {
+                    continue 
+                }
+
+                if grid.diagonal_mode == AStar_Diagonal_Mode.NO_CORNER_CUT {
+                    if !is_valid_footprint(grid, {pos.x + i32(dx), pos.y}, size) ||
+                       !is_valid_footprint(grid, {pos.x, pos.y + i32(dy)}, size) {
+                        continue
+                    }
+                }
+            }
+
+            append(&neighbours, neighbor)
+        }
+    }
+    return neighbours[:]
+}
+
+@(private = "file")
+find_nearest_valid_target :: proc(grid: Grid, target: Vector2, size: Vector2) -> Vector2 {
+    if is_valid_footprint(grid, target, size) {
+        return target;
+    }
+
+    radius := 1;
+    for {
+        for dx in -radius..=radius {
+            for dy in -radius..=radius {
+                candidate : Vector2 = { target.x + i32(dx), target.y + i32(dy) };
+                if math.abs(dx) != radius && math.abs(dy) != radius {
+                    continue;
+                }
+                if is_valid_footprint(grid, candidate, size) {
+                    return candidate;
+                }
+            }
+        }
+        radius += 1;
+
+        if radius > 10 { break; }
+    }
+
+    return target;
+}
+
+@(private = "file")
 to_index :: proc(pos: Vector2, cols: i32) -> i32 {
     return pos.y * cols + pos.x
 }
@@ -249,66 +340,27 @@ is_node_in_closed_set :: proc(closedSet: []^AStar_Node, node: ^AStar_Node) -> bo
 }
 
 @(private = "file")
-retrace_path :: proc(start, target: ^AStar_Node, allocator := context.allocator, loc := #caller_location) -> []^AStar_Node { 
-    path := make([dynamic]^AStar_Node, allocator, loc) 
-    current := target
+is_valid_tile :: proc(grid: Grid, pos: Vector2) -> bool {
+    return pos.x >= grid.region.min.x && pos.x < grid.region.max.x &&
+           pos.y >= grid.region.min.y && pos.y < grid.region.max.y &&
+           grid.tiles[to_index(pos, grid.cols)].isWalkable;
+}
 
-    for current.tile.pos != start.tile.pos {
-        append(&path, current)
-        current = current.parent
+@(private = "file")
+is_valid_footprint :: proc(grid: Grid, pos: Vector2, size: Vector2) -> bool {
+    if size == SMALL_TILE_SIZE {
+        return is_valid_tile(grid, pos);
     }
-    append(&path, start) 
 
-    slice.reverse(path[:])
-
-    return path[:]
-}
-
-@(private = "file")
-is_valid_position :: proc(pos: Vector2, cols: i32, rows: i32) -> bool {
-    return pos.x >= 0 && pos.x < cols && pos.y >= 0 && pos.y < rows
-}
-
-@(private = "file")
-get_neighbours :: proc(grid: Grid, node: ^AStar_Node, nodes: []AStar_Node, allocator := context.temp_allocator, loc := #caller_location) -> []^AStar_Node {
-    neighbours := make([dynamic]^AStar_Node, 0, allocator, loc)
-
-    pos : Vector2 = { i32(node.tile.pos.x), i32(node.tile.pos.y) }
-    cols  := grid.cols
-    rows  := grid.rows
-
-    for dx in -1..=1 {
-        for dy in -1..=1 {
-            if dx == 0 && dy == 0 {
-                continue
+    for dx in 0 ..< size[0] {
+        for dy in 0 ..< size[1] {
+            current : Vector2 = { pos[0] + dx, pos[1] + dy };
+            if !is_valid_tile(grid, current) {
+                return false;
             }
-
-            new_pos : Vector2 = { pos.x + i32(dx), pos.y + i32(dy) }
-
-            if !is_valid_position(new_pos, cols, rows) {
-                continue
-            }
-
-            index := new_pos.y * cols + new_pos.x
-            neighbor := &nodes[index]
-
-            if dx != 0 && dy != 0 {
-
-                if grid.diagonal_mode == AStar_Diagonal_Mode.NEVER {
-                    continue 
-                }
-
-                if grid.diagonal_mode == AStar_Diagonal_Mode.NO_CORNER_CUT {
-                    if !nodes[pos.y * cols + new_pos.x].tile.isWalkable || !nodes[new_pos.y * cols + pos.x].tile.isWalkable {
-                        continue // Block diagonal if one of the adjacent tiles is not walkable
-                    }
-                }
-            }
-
-            append(&neighbours, neighbor)
         }
     }
-    return neighbours[:]
+    return true;
 }
 
 @(private = "file")
